@@ -70,7 +70,7 @@ node server.js
 | 组件 | 说明 |
 | --- | --- |
 | Node.js ≥ 18 | 运行后端服务 |
-| whisper-cli（Vulkan 版）| 官方 whisper.cpp release 只带 CPU/CUDA 版，**Vulkan 版为社区预编译**（本项目使用 `whisper-v1.8.4-windows-vulkan-x64`，可按构建/版本调整），放入 `tools/`，A/N 卡均可 GPU 加速 |
+| whisper-cli（Vulkan 版）| 官方 whisper.cpp release 只带 CPU/CUDA 版，本项目用的 **Vulkan 社区预编译**：[whisper-v1.8.4-windows-vulkan-x64.zip](https://github.com/lemonade-sdk/whisper.cpp-rocm/releases/download/v1.8.4/whisper-v1.8.4-windows-vulkan-x64.zip)，解压后放入 `tools/`，A/N 卡均可 GPU 加速 |
 | ggml-large-v3-turbo.bin | 转写模型（约 1.6GB），自 [HuggingFace · ggerganov/whisper.cpp · ggml-large-v3-turbo.bin](https://huggingface.co/ggerganov/whisper.cpp/blob/main/ggml-large-v3-turbo.bin) 下载，放入 `tools/` |
 | ffmpeg | 音频转 16kHz wav。Windows 可 `winget install ffmpeg`，或用官网全量包；把可执行文件路径写入 `config.json` 的 `ffmpeg` 字段 |
 | LM Studio | 运行本地大模型（qwen3.6-35b-a3b 等），需已启动并加载模型 |
