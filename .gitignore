@@ -17,3 +17,6 @@ config.json
 .DS_Store
 Thumbs.db
 node_modules/
+
+# ---- 内部开发文档（不论是否发布到仓库） ----
+DEVELOPMENT.md

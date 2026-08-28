@@ -3,21 +3,33 @@
 粘贴 B 站视频链接，自动生成**核心概述 / 内容要点 / 关键名词 / 结语**，还能就视频内容自由追问（支持多轮对话）。
 全程本地运行：语音转写走 **whisper-large-v3-turbo（Vulkan GPU 加速）**，总结走 **LM Studio 本地 Qwen3.6**，视频内容不出本机、无需 API key、不限量。
 
-> 开发与设计细节见 **[DEVELOPMENT.md](DEVELOPMENT.md)**（供后续维护/二次开发参考）。
-
 ---
 
 ## 一、快速开始（三步跑起来）
 
 ### 准备
+0. **获取项目**：`git clone` 本项目到本地（或下载 ZIP 解压），以下操作均在项目目录内进行
 1. 已安装 **Node.js ≥ 18**
 2. **LM Studio** 已安装并启动
 3. whisper / 模型 / ffmpeg 需自行准备（仓库不含大文件，见下方「环境要求」下载指引）
 4. 复制 `config.example.json` 为 `config.json`，按本机实际路径修改（至少 ffmpeg 路径）
 
+目录结构预览（要把依赖放进对应位置）：
+
+```text
+BiliSummarize/
+├── server.js           主服务（node server.js / start.bat）
+├── config.example.json 配置模板 → 复制为 config.json 修改
+├── public/             前端页面（原生 HTML/JS，无需构建，直接用）
+├── tools/              需自备：whisper-cli（Vulkan 版）+ ggml-large-v3-turbo.bin
+└── temp/               运行缓存（音频/转写文本，自动生成）
+```
+
 ### 第 1 步：启动本地大模型
 
 打开 **LM Studio** → 左侧加载模型，选择 `qwen/qwen3.6-35b-a3b`（或其他本地模型），点加载。
+
+> 💡 若模型未下载，在 LM Studio 搜索框输入 `qwen3.6-35b-a3b` 可从 HuggingFace 拉取（12GB 显存建议选 Q4_K 量化版）。
 
 > ⚠️ **重要**：在 LM Studio 里关闭模型的思考开关——路径：**「终端（Terminal）→ Inference → 自定义字段（Custom Fields）→ Enable Thinking」**，关闭后**重新加载模型**才生效。不关的话，35B 模型的思考链可达数万 token，一次总结要好几分钟。
 
@@ -53,12 +65,14 @@ node server.js
 
 ## 二、环境要求
 
+> 本项目目前面向 **Windows** 开发（`start.bat`、whisper Vulkan 构建均为 Windows 形态）。
+
 | 组件 | 说明 |
 | --- | --- |
 | Node.js ≥ 18 | 运行后端服务 |
-| whisper-cli（Vulkan 版）| 从 whisper.cpp 预编译发布页获取 **Windows Vulkan** 版（本项目使用 `whisper-v1.8.4-windows-vulkan-x64`，可按构建/版本调整），放入 `tools/`，A/N 卡均可 GPU 加速 |
+| whisper-cli（Vulkan 版）| 官方 whisper.cpp release 只带 CPU/CUDA 版，**Vulkan 版为社区预编译**（本项目使用 `whisper-v1.8.4-windows-vulkan-x64`，可按构建/版本调整），放入 `tools/`，A/N 卡均可 GPU 加速 |
 | ggml-large-v3-turbo.bin | 转写模型（约 1.6GB），自 [HuggingFace · ggerganov/whisper.cpp · ggml-large-v3-turbo.bin](https://huggingface.co/ggerganov/whisper.cpp/blob/main/ggml-large-v3-turbo.bin) 下载，放入 `tools/` |
-| ffmpeg | 用于音频转 16kHz wav，安装后把路径写入 `config.json` 的 `ffmpeg` 字段 |
+| ffmpeg | 音频转 16kHz wav。Windows 可 `winget install ffmpeg`，或用官网全量包；把可执行文件路径写入 `config.json` 的 `ffmpeg` 字段 |
 | LM Studio | 运行本地大模型（qwen3.6-35b-a3b 等），需已启动并加载模型 |
 
 > `tools/` 体积大（whisper 构建 + 1.6GB 模型，合计约 1.7GB），**未纳入 git 仓库**。克隆后请把 whisper-cli 与模型放回 `tools/`，并复制 `config.example.json` 为 `config.json` 修改本机路径。
@@ -114,3 +128,7 @@ Edge 页面 ──> Node 后端 (localhost:3000)
 - **转写失败**：确认 `config.json` 里 whisper/模型路径正确，显卡驱动支持 Vulkan。
 - **改端口**：修改 `config.json` 的 `port`。
 - **追问提示「任务已过期」**：总结任务在服务端保留 60 分钟，超时需重新总结后再提问。
+
+## 八、许可证
+
+[MIT License](LICENSE)，Copyright (c) 2026 Altria Pendragon。
