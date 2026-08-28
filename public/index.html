@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BiliSummarize · B站视频要点总结</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="bg" aria-hidden="true">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+  </div>
+
+  <main class="wrap">
+    <header class="hero">
+      <div class="hero-badge">本地 AI · 隐私安全 · GPU 加速</div>
+      <h1>Bili<span>Summarize</span></h1>
+      <p class="hero-sub">粘贴 B 站视频链接，一键生成内容要点总结</p>
+    </header>
+
+    <!-- 输入区 -->
+    <section class="card input-card">
+      <div class="input-row">
+        <input
+          id="url"
+          type="text"
+          placeholder="粘贴 B 站视频链接，如 https://www.bilibili.com/video/BV1xxxxxx…"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <button id="paste" class="ghost" title="从剪贴板粘贴">📋 粘贴</button>
+      </div>
+      <div class="controls">
+        <label class="field">
+          <span>识别语言</span>
+          <select id="lang">
+            <option value="zh">中文</option>
+            <option value="auto">自动检测</option>
+            <option value="en">English</option>
+          </select>
+        </label>
+        <button id="go" class="primary">
+          <span class="go-icon">▶</span> 开始总结
+        </button>
+      </div>
+      <div id="sys-status" class="sys-status"></div>
+    </section>
+
+    <!-- 隐私提示 -->
+    <div class="privacy-strip">
+      <span class="privacy-icon">🔒</span>
+      <div class="privacy-text">
+        <b>本地推理 · 隐私安全</b>
+        <span>语音转写（whisper GPU）与 AI 总结（本地 Qwen 模型）均在您的电脑上完成，视频内容、音频、文字全程不出本机，无需联网即可保护隐私。</span>
+      </div>
+    </div>
+
+    <!-- 进度区 -->
+    <section class="card progress-card hidden" id="progress-card">
+      <div class="steps" id="steps">
+        <div class="step" data-step="info"><span class="dot"></span><span class="label">获取信息</span></div>
+        <div class="step" data-step="download"><span class="dot"></span><span class="label">字幕 / 音频</span></div>
+        <div class="step" data-step="transcribe"><span class="dot"></span><span class="label">语音识别</span></div>
+        <div class="step" data-step="summarize"><span class="dot"></span><span class="label">AI 总结</span></div>
+        <div class="step" data-step="done"><span class="dot"></span><span class="label">完成</span></div>
+      </div>
+      <div class="progress-line">
+        <div class="progress-bar" id="progress-bar"></div>
+      </div>
+      <div class="current-msg" id="current-msg">准备中…</div>
+      <div class="log" id="log"></div>
+    </section>
+
+    <!-- 结果区 -->
+    <section class="result hidden" id="result">
+      <div class="card video-card">
+        <div class="cover"><img id="cover" alt="封面" /></div>
+        <div class="vmeta">
+          <div class="vtitle" id="vtitle"></div>
+          <div class="vsub">
+            <span class="chip" id="vowner"></span>
+            <span class="chip" id="vduration"></span>
+            <span class="chip" id="vpart"></span>
+          </div>
+          <div id="vdesc" class="vdesc"></div>
+        </div>
+      </div>
+
+      <div class="timing-row" id="timings"></div>
+
+      <div class="card body-card">
+        <h2 class="sec-title"><span class="t-dot"></span>核心概述</h2>
+        <p id="overview" class="overview"></p>
+      </div>
+
+      <div class="card body-card">
+        <h2 class="sec-title"><span class="t-dot"></span>内容要点</h2>
+        <ol id="points" class="points"></ol>
+      </div>
+
+      <div class="card body-card">
+        <h2 class="sec-title"><span class="t-dot"></span>关键名词</h2>
+        <div id="keywords" class="keywords"></div>
+      </div>
+
+      <div class="card body-card conclusion-card">
+        <h2 class="sec-title"><span class="t-dot"></span>结语</h2>
+        <p id="conclusion" class="conclusion"></p>
+      </div>
+
+      <div class="actions">
+        <button id="copy-all" class="ghost">📄 复制全文</button>
+        <button id="copy-md" class="ghost">#️⃣ 复制 Markdown</button>
+      </div>
+    </section>
+
+    <!-- 追问区 -->
+    <section class="card qa-card hidden" id="qa">
+      <h2 class="sec-title"><span class="t-dot"></span>关于本视频，还有什么想问的？</h2>
+      <div class="qa-list" id="qa-list"></div>
+      <div class="qa-input-row">
+        <input id="qa-input" type="text" placeholder="比如：视频里显卡待机温度是多少？" autocomplete="off" />
+        <button id="qa-send" class="primary small">提问</button>
+      </div>
+      <div class="qa-hint">回答由本地 Qwen 模型实时生成 · 可结合视频内容，也可自由发散提问</div>
+    </section>
+
+    <!-- 错误区 -->
+    <section class="card error-card hidden" id="error-card">
+      <div class="error-title">⚠️ 出错了</div>
+      <div id="error-msg" class="error-msg"></div>
+      <div class="error-hint" id="error-hint"></div>
+    </section>
+
+    <footer class="foot">
+      <div>转写：whisper-large-v3-turbo（Vulkan GPU） · 总结：本地 Qwen3.6 · 内容全程不出本机</div>
+      <div class="designed">王者荣耀世界加强近战角色！！！</div>
+    </footer>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

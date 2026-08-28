@@ -1,0 +1,19 @@
+# ---- 运行时缓存（自动生成）----
+temp/
+*.m4s
+*.wav
+*.mp3
+
+# ---- 大文件 / 二进制：本地自备，不入库 ----
+# whisper-cli 构建与 ggml 模型（~1.7GB 合计），见 README「环境要求」
+tools/
+audio_test.wav
+
+# ---- 本机配置：请复制 config.example.json 为 config.json 使用 ----
+config.json
+
+# ---- 日志 / 系统 / 编辑器 ----
+*.log
+.DS_Store
+Thumbs.db
+node_modules/
