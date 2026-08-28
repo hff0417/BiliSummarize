@@ -18,5 +18,6 @@ config.json
 Thumbs.db
 node_modules/
 
-# ---- 内部开发文档（不论是否发布到仓库） ----
+# ---- 内部文档：仅本地，不进仓库 ----
 DEVELOPMENT.md
+CLAUDE.md
