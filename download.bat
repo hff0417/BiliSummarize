@@ -35,6 +35,9 @@ rem Paths are relative to this script's folder, so the repo can be cloned anywhe
 set "YTDLP=%~dp0tools\yt-dlp.exe"
 set "FFMPEG=%~dp0tools\ffmpeg.exe"
 
+rem Fall back to ffmpeg on PATH when the configured path is missing.
+if not exist "%FFMPEG%" for /f "delims=" %%P in ('where ffmpeg 2^>nul') do set "FFMPEG=%%P"
+
 rem Default output folder. Also covered by .gitignore.
 set "OUT_DIR=%~dp0downloads"
 
@@ -173,7 +176,7 @@ rem ============================== 3) DOWNLOAD ==============================
 echo [step 2/2] Downloading ^(live progress below^)...
 echo            ------------------------------------------------------
 call :ticks _t2
-"%YTDLP%" --no-warnings --newline --windows-filenames --no-simulate --ffmpeg-location "%FFMPEG%" %OPT_MODE% %OPT_PLAYLIST% %OPT_SUBS% %OPT_COOKIES% %EXTRA% -o "%OUT_DIR%\%%(title).80s [%%(id)s].%%(ext)s" --print after_move:filepath "%URL%"
+"%YTDLP%" --no-warnings --newline --windows-filenames --no-simulate %OPT_FFMPEG% %OPT_MODE% %OPT_PLAYLIST% %OPT_SUBS% %OPT_COOKIES% %EXTRA% -o "%OUT_DIR%\%%(title).80s [%%(id)s].%%(ext)s" --print after_move:filepath "%URL%"
 set "RC=%errorlevel%"
 call :ticks _t3
 echo            ------------------------------------------------------

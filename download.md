@@ -57,7 +57,7 @@ download.bat https://www.youtube.com/watch?v=xxxx&list=yyyy
 | 变量 | 说明 | 默认值 |
 | --- | --- | --- |
 | `YTDLP` | yt-dlp 路径 | `<项目目录>\tools\yt-dlp.exe` |
-| `FFMPEG` | ffmpeg 路径 | `<项目目录>\tools\ffmpeg.exe` |
+| `FFMPEG` | ffmpeg 路径（不存在时自动回退 `where ffmpeg`） | `<项目目录>\tools\ffmpeg.exe` |
 | `OUT_DIR` | 输出目录 | `<项目目录>\downloads`（已在 `.gitignore` 排除） |
 | `MODE` | 下载模式，见下节 | `video` |
 | `PLAYLIST` | `1`=允许下整个播放列表；`0`=只下单个视频 | `0` |
