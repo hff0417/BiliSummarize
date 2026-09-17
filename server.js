@@ -11,7 +11,7 @@ const { spawn } = require('node:child_process');
 const ROOT = __dirname;
 const cfg = loadConfig();
 
-const { parseUrl, getVideoInfo, getSubtitle, getAudioUrl, downloadAudio } = require('./lib/bilibili');
+const { resolve, supportedLabels, picHeaders, buildInfoView } = require('./lib/providers');
 const { transcribe } = require('./lib/transcribe');
 const { summarize, ask } = require('./lib/summarize');
 
@@ -26,6 +26,7 @@ function loadConfig() {
   raw.whisperCli = resolve(raw.whisperCli);
   raw.whisperModel = resolve(raw.whisperModel);
   raw.ffmpeg = resolve(raw.ffmpeg);
+  raw.ytDlp = resolve(raw.ytDlp || 'tools/yt-dlp.exe');
   raw.tempDir = resolve(raw.tempDir || 'temp');
   fs.mkdirSync(raw.tempDir, { recursive: true });
   return raw;
@@ -83,12 +84,22 @@ function enqueue(fn) {
 function createJob(url, lang) {
   const id = crypto.randomBytes(4).toString('hex');
   const emitter = new EventEmitter();
-  jobs.set(id, { id, url, lang, emitter, history: [] });
+  const job = { id, url, lang, emitter, history: [], log: [] };
+  jobs.set(id, job);
+
+  // 事件既实时推给订阅者，也顺序留档：任务可能在页面连上 SSE 之前就结束了
+  // （例如「链接不被支持」这种不经过网络的秒失败），后到的客户端靠留档仍能拿到结果，
+  // 否则前端会一直停在转圈状态。回放逻辑见 handleEvents。
+  const emit = (data) => {
+    job.log.push(data);
+    emitter.emit('event', data);
+  };
+
   enqueue(async () => {
     try {
-      await runPipeline(jobs.get(id), (data) => emitter.emit('event', data));
+      await runPipeline(job, emit);
     } catch (e) {
-      emitter.emit('event', { type: 'error', message: e && e.message ? e.message : String(e) });
+      emit({ type: 'error', message: e && e.message ? e.message : String(e) });
     }
   }).finally(() => {
     // 任务结果保留 60 分钟，供页面重连与追问使用
@@ -98,30 +109,25 @@ function createJob(url, lang) {
 }
 
 async function runPipeline(job, emit) {
-  const { bvid, p } = await parseUrl(job.url);
-  if (!bvid) throw new Error('无法识别链接，请粘贴形如 https://www.bilibili.com/video/BVxxxxxxxxxx 的地址');
+  // 按域名路由到对应平台适配层（lib/providers/）
+  const provider = resolve(job.url);
+  if (!provider) {
+    throw new Error(
+      `暂不支持该链接。目前支持：${supportedLabels().join(' / ')}` +
+        '（B 站 bilibili.com / b23.tv，YouTube youtube.com / youtu.be）',
+    );
+  }
+  const ref = await provider.parseUrl(job.url);
+  if (!ref) throw new Error(`无法从链接中解析出 ${provider.label} 视频 ID，请检查链接后重试`);
 
   const times = {};
   const tStart = Date.now();
   const ms = (t) => Math.max(0, Math.round((Date.now() - t) / 1000));
 
   emit({ type: 'step', step: 'info', message: '正在获取视频信息…' });
-  const info = await getVideoInfo(bvid);
-  const partIdx = Math.min(Math.max((p || 1) - 1, 0), info.pages.length - 1);
-  const part = info.pages[partIdx];
+  const info = await provider.getInfo(ref, cfg); // 内部会补齐 ref.partKey
   job.info = info;
-  const infoView = {
-    title: info.title,
-    desc: info.desc,
-    pic: info.pic,
-    owner: info.owner,
-    duration: info.duration,
-    pubdate: info.pubdate,
-    bvid: info.bvid,
-    part: part.part,
-    partIndex: partIdx + 1,
-    partCount: info.pages.length,
-  };
+  const infoView = buildInfoView(info, ref);
   emit({ type: 'info', info: infoView });
 
   // 快路径：官方字幕
@@ -129,15 +135,16 @@ async function runPipeline(job, emit) {
   try {
     emit({ type: 'step', step: 'subtitle', message: '尝试获取官方字幕…' });
     const tSub = Date.now();
-    transcript = await getSubtitle(info.aid, part.cid);
+    transcript = await provider.getTranscript(ref, info, cfg);
     times.subtitle = ms(tSub);
     if (transcript) emit({ type: 'note', message: '✓ 已获取官方字幕，无需语音识别' });
   } catch {
     transcript = null;
   }
 
-  // 转写缓存：同一视频重复总结可秒出
-  const cacheTxt = path.join(cfg.tempDir, `${info.bvid}_${part.cid}.transcript.txt`);
+  // 转写缓存：同一视频重复总结可秒出（文件名带平台特征，跨平台不会撞名）
+  const key = provider.fileKey(ref);
+  const cacheTxt = path.join(cfg.tempDir, `${key}.transcript.txt`);
   if (!transcript && fs.existsSync(cacheTxt) && fs.statSync(cacheTxt).size > 0) {
     transcript = fs.readFileSync(cacheTxt, 'utf8').trim();
     emit({ type: 'note', message: '✓ 使用已缓存的转写文本（跳过重新识别）' });
@@ -146,15 +153,13 @@ async function runPipeline(job, emit) {
   if (!transcript) {
     emit({ type: 'step', step: 'download', message: '正在下载音频…' });
     const tDl = Date.now();
-    const m4s = path.join(cfg.tempDir, `${info.bvid}_${part.cid}.m4s`);
-    const audioUrl = await getAudioUrl(info.bvid, part.cid);
-    await downloadAudio(audioUrl, m4s);
+    const audio = await provider.downloadAudio(ref, cfg.tempDir, cfg);
     times.download = ms(tDl);
 
     emit({ type: 'step', step: 'convert', message: '正在转换音频格式…' });
     const tCv = Date.now();
-    const wav = path.join(cfg.tempDir, `${info.bvid}_${part.cid}.wav`);
-    await ffmpegToWav(m4s, wav);
+    const wav = path.join(cfg.tempDir, `${key}.wav`);
+    await ffmpegToWav(audio, wav);
     times.convert = ms(tCv);
 
     emit({ type: 'step', step: 'transcribe', message: 'GPU 语音识别中，约需 10~30 秒…' });
@@ -210,6 +215,7 @@ async function handleStatus(res) {
     whisperCli: fs.existsSync(cfg.whisperCli),
     whisperModel: fs.existsSync(cfg.whisperModel),
     ffmpeg: fs.existsSync(cfg.ffmpeg),
+    ytDlp: fs.existsSync(cfg.ytDlp),
     lmStudio: false,
     lmStudioModels: [],
     lmStudioMatch: false,
@@ -217,6 +223,7 @@ async function handleStatus(res) {
       whisperCli: cfg.whisperCli,
       whisperModel: cfg.whisperModel,
       ffmpeg: cfg.ffmpeg,
+      ytDlp: cfg.ytDlp,
       lmStudioModel: cfg.lmStudioModel,
     },
   };
@@ -235,7 +242,8 @@ async function handleStatus(res) {
 function handlePic(req, res) {
   const target = new URL(req.url, 'http://x').searchParams.get('url');
   if (!target) return sendJson(res, 400, { error: 'missing url' });
-  fetch(target, { headers: { 'User-Agent': require('./lib/bilibili').UA, Referer: 'https://www.bilibili.com/' } })
+  // 请求头按封面图所在平台给（B 站必须带 Referer，YouTube 带了反而可能被拒）
+  fetch(target, { headers: picHeaders(target) })
     .then(async (r) => {
       const buf = Buffer.from(await r.arrayBuffer());
       res.writeHead(200, {
@@ -260,7 +268,9 @@ function handleEvents(req, res) {
     Connection: 'keep-alive',
   });
   res.write('retry: 2000\n\n');
-  if (job.last) res.write(`data: ${JSON.stringify(job.last)}\n\n`);
+  // 先回放任务已产生的事件（包括抢在本次连接之前就发出的），再转入实时推送。
+  // 这段回放与下面的订阅之间没有 await，Node 单线程下不会漏事件。
+  for (const ev of job.log || []) res.write(`data: ${JSON.stringify(ev)}\n\n`);
   const on = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
   job.emitter.on('event', on);
   const ping = setInterval(() => res.write(': ping\n\n'), 15000);
@@ -355,6 +365,8 @@ server.listen(cfg.port, () => {
   console.log(`  转写引擎:  ${fs.existsSync(cfg.whisperCli) ? 'whisper-cli (Vulkan GPU) ✅' : 'whisper-cli 未找到 ❌'}`);
   console.log(`  转写模型:  ${fs.existsSync(cfg.whisperModel) ? 'whisper-large-v3-turbo ✅' : '模型文件未找到 ❌'}`);
   console.log(`  ffmpeg:    ${fs.existsSync(cfg.ffmpeg) ? '已就绪 ✅' : '未找到 ❌'}`);
+  console.log(`  yt-dlp:    ${fs.existsSync(cfg.ytDlp) ? '已就绪 ✅（YouTube 取流）' : '未找到 ❌（YouTube 将不可用）'}`);
+  console.log(`  支持平台:  ${supportedLabels().join(' / ')}`);
   console.log(`  总结模型:  ${cfg.lmStudioModel}（LM Studio localhost:1234）`);
   console.log('');
 });

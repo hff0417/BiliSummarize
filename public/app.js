@@ -69,11 +69,17 @@ els.url.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') els.go.click();
 });
 
+// 支持的链接：B 站（含裸 BV 号）与 YouTube（含 youtu.be 短链）
+const SUPPORTED_URL = /BV[0-9A-Za-z]{10}|bilibili\.com|b23\.tv|youtube\.com|youtu\.be/i;
+
 // ---------- 开始 ----------
 els.go.addEventListener('click', async () => {
   const url = els.url.value.trim();
-  if (!url || !/BV[0-9A-Za-z]{10}|bilibili\.com|b23\.tv/i.test(url)) {
-    showError('链接似乎不对', '请粘贴形如 https://www.bilibili.com/video/BV1xxxxxx 的视频链接，或直接粘贴 BV 号');
+  if (!url || !SUPPORTED_URL.test(url)) {
+    showError(
+      '链接似乎不对',
+      '请粘贴 B 站视频链接（如 https://www.bilibili.com/video/BV1xxxxxx，或直接粘贴 BV 号），或 YouTube 链接（如 https://www.youtube.com/watch?v=xxxxxxxxxxx）',
+    );
     return;
   }
   startJob(url);
@@ -143,8 +149,11 @@ function handleEvent(data) {
 // ---------- 进度 ----------
 const STEP_ORDER = ['info', 'download', 'transcribe', 'summarize', 'done'];
 const STEP_PCT = { info: 18, download: 40, transcribe: 70, summarize: 92, done: 100 };
+// 后端还会发 subtitle / convert 两个细分步骤，都归到界面上的「字幕 / 音频」这一步
+const STEP_ALIAS = { subtitle: 'download', convert: 'download' };
 
 function activateStep(key) {
+  key = STEP_ALIAS[key] || key;
   const idx = STEP_ORDER.indexOf(key);
   if (idx < 0) return;
   els.steps.forEach((s, i) => {
@@ -181,9 +190,16 @@ function finishJob(data) {
   if (videoInfo) {
     els.cover.src = '/api/pic?url=' + encodeURIComponent(videoInfo.pic || '');
     els.vtitle.textContent = videoInfo.title || '';
-    els.vowner.textContent = 'UP主：' + (videoInfo.owner || '未知');
+    els.vowner.textContent = (videoInfo.ownerLabel || 'UP主') + '：' + (videoInfo.owner || '未知');
     els.vduration.textContent = '时长 ' + fmtDur(videoInfo.duration);
-    els.vpart.textContent = `第 ${videoInfo.partIndex}/${videoInfo.partCount} 个分P` + (videoInfo.partCount > 1 ? ' · ' + (videoInfo.part || '') : '');
+    // 分P 是 B 站特有的概念，YouTube 只有一段，分P数<=1 时整块不显示
+    if (videoInfo.partCount > 1) {
+      els.vpart.textContent = `第 ${videoInfo.partIndex}/${videoInfo.partCount} 个分P` + (videoInfo.part ? ' · ' + videoInfo.part : '');
+      els.vpart.classList.remove('hidden');
+    } else {
+      els.vpart.textContent = '';
+      els.vpart.classList.add('hidden');
+    }
     els.vdesc.textContent = (videoInfo.desc || '').slice(0, 140);
   }
 
@@ -241,7 +257,11 @@ function buildMarkdown() {
   const s = lastResult.summary;
   const info = lastResult.info || {};
   let md = `# ${info.title || '视频总结'}\n\n`;
-  if (info.owner) md += `- 视频链接：https://www.bilibili.com/video/${info.bvid}\n- UP主：${info.owner}\n\n`;
+  // 链接与作者称谓由后端按平台给出（B 站→UP主，YouTube→频道）
+  const meta = [];
+  if (info.link) meta.push(`- 视频链接：${info.link}`);
+  if (info.owner) meta.push(`- ${info.ownerLabel || 'UP主'}：${info.owner}`);
+  if (meta.length) md += meta.join('\n') + '\n\n';
   md += `## 核心概述\n${s.overview || ''}\n\n`;
   md += `## 内容要点\n`;
   (s.points || []).forEach((p, i) => (md += `${i + 1}. ${p}\n`));
@@ -306,6 +326,15 @@ function buildHint(msg) {
   }
   if (/ffmpeg/.test(m)) {
     return '提示：请确认 ffmpeg 已安装，并在 config.json 的 ffmpeg 字段里填好路径。';
+  }
+  if (/412|风控|非 JSON/.test(m)) {
+    return '提示：B 站会限制境外 / 代理 IP。如果你开着 VPN 或全局代理，请先关掉；或把代理切到「规则模式」让 bilibili.com 走直连（这样 B 站与 YouTube 可同时可用）。详见项目根目录的 NETWORK.md。';
+  }
+  if (/yt-dlp/.test(m)) {
+    return '提示：YouTube 取流依赖 tools/yt-dlp.exe。请确认文件存在（路径可在 config.json 的 ytDlp 字段修改）；若是取流失败，先运行 tools\\yt-dlp.exe -U 升级。另需确认网络能访问 YouTube。';
+  }
+  if (/暂不支持该链接/.test(m)) {
+    return '提示：目前支持 B 站与 YouTube 的视频页链接，请确认粘贴的不是专栏、动态或纯播放列表地址。';
   }
   return '';
 }

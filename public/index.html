@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>BiliSummarize · B站视频要点总结</title>
+  <title>BiliSummarize · 视频要点总结</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="/style.css" />
 </head>
@@ -18,7 +18,7 @@
     <header class="hero">
       <div class="hero-badge">本地 AI · 隐私安全 · GPU 加速</div>
       <h1>Bili<span>Summarize</span></h1>
-      <p class="hero-sub">粘贴 B 站视频链接，一键生成内容要点总结</p>
+      <p class="hero-sub">粘贴 B 站 / YouTube 视频链接，一键生成内容要点总结</p>
     </header>
 
     <!-- 输入区 -->
@@ -27,7 +27,7 @@
         <input
           id="url"
           type="text"
-          placeholder="粘贴 B 站视频链接，如 https://www.bilibili.com/video/BV1xxxxxx…"
+          placeholder="粘贴视频链接：B 站（bilibili.com、BV 号）或 YouTube（youtube.com、youtu.be）…"
           autocomplete="off"
           spellcheck="false"
         />
@@ -54,7 +54,7 @@
       <span class="privacy-icon">🔒</span>
       <div class="privacy-text">
         <b>本地推理 · 隐私安全</b>
-        <span>语音转写（whisper GPU）与 AI 总结（本地 Qwen 模型）均在您的电脑上完成，视频内容、音频、文字全程不出本机，无需联网即可保护隐私。</span>
+        <span>语音转写（whisper GPU）与 AI 总结（本地 Qwen 模型）均在您的电脑上完成——视频、音频、文字不会被上传到任何第三方 AI 服务，只在本机流转。</span>
       </div>
     </div>
 
@@ -122,7 +122,7 @@
       <h2 class="sec-title"><span class="t-dot"></span>关于本视频，还有什么想问的？</h2>
       <div class="qa-list" id="qa-list"></div>
       <div class="qa-input-row">
-        <input id="qa-input" type="text" placeholder="比如：视频里显卡待机温度是多少？" autocomplete="off" />
+        <input id="qa-input" type="text" autocomplete="off" />
         <button id="qa-send" class="primary small">提问</button>
       </div>
       <div class="qa-hint">回答由本地 Qwen 模型实时生成 · 可结合视频内容，也可自由发散提问</div>

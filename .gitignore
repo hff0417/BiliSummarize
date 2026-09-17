@@ -9,6 +9,9 @@ temp/
 tools/
 audio_test.wav
 
+# ---- 下载产物：体积大且可能涉及版权，绝不入库 ----
+downloads/
+
 # ---- 本机配置：请复制 config.example.json 为 config.json 使用 ----
 config.json
 
